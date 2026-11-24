@@ -66,27 +66,97 @@ export function itemFor(ex, p) {
   let sets = ex.compound ? sc.setsC : 3;
   if (p.experience === 'beg' && ex.compound) sets = 3;
   if (p.sessionMin <= 45 && !ex.compound) sets = 2;
+  if (ex.id === 'plank') return { exId: ex.id, sets, lo: 30, hi: 60, rest: 60 }; // 플랭크는 초 단위
   return { exId: ex.id, sets, lo, hi, rest: ex.compound ? sc.restC : sc.restI };
 }
 
+export const PLAN_RULES = 2;
+
+// 부위 묶음과 주간 목표 세트 수 (부위당 주 10세트 이상이 근육 유지·성장에 유리하다는 연구 기준)
+const GROUP = { chest: 'chest', back: 'back', shoulders: 'shoulders', quads: 'quads', hams: 'hinge', glutes: 'hinge', biceps: 'biceps', triceps: 'triceps' };
+const ARMS = new Set(['biceps', 'triceps']);
+export function weeklyTargets(goal) {
+  const T = goal === 'bulk' ? 12 : 10, A = goal === 'bulk' ? 8 : 6;
+  return { chest: T, back: T, quads: T, hinge: T, shoulders: T - 2, biceps: A, triceps: A };
+}
+export function weeklySets(plan) {
+  const per = plan.days / plan.sessions.length, out = {};
+  for (const s of plan.sessions) for (const it of s.items) {
+    const g = GROUP[byId[it.exId].muscle];
+    if (g) out[g] = (out[g] || 0) + it.sets * per;
+  }
+  return out;
+}
+
+function chooseItems(key, p, variant, budget, cardio) {
+  const slots = T[key].slots;
+  // 우선순위: 큰 동작 3개 → 팔 운동 1개 → 다음 동작 → 팔 운동 1개 → 나머지. 팔 운동이 시간에 밀려 빠지지 않게
+  const arms = [...new Set(slots.filter((x) => ARMS.has(x)))];
+  const main = slots.filter((x) => !ARMS.has(x));
+  const order = [...main.slice(0, 3), ...arms.slice(0, 1), ...main.slice(3, 4), ...arms.slice(1), ...main.slice(4), ...slots.filter((x) => ARMS.has(x)).slice(arms.length)];
+  const used = new Set(), items = [];
+  // 팔 운동은 시간과 상관없이 반드시 넣는다 (60분 이상이면 이두·삼두 둘 다, 짧으면 하나)
+  const mustArms = arms.slice(0, budget >= 60 ? 2 : 1);
+  for (const slot of order) {
+    const ex = pick(slot, p, used, variant);
+    if (!ex) continue;
+    const it = itemFor(ex, p);
+    const isArm = ARMS.has(slot) && mustArms.includes(slot) && !items.some((x) => byId[x.exId].pattern === slot);
+    if (!isArm && items.length >= 3 && minutes({ items: [...items, it, ...mustArms.filter((a) => !items.some((x) => byId[x.exId].pattern === a) && a !== slot).map(() => ({ sets: 2, rest: 60 }))], cardio }) > budget) continue;
+    if (isArm) it.sets = Math.min(it.sets, 3);
+    used.add(ex.id);
+    items.push(it);
+  }
+  // 운동 순서: 큰 동작 먼저, 팔·작은 동작은 뒤로
+  return items.sort((x, y) => byId[y.exId].compound - byId[x.exId].compound);
+}
+
+// 유산소 시간: 감량 20분·유지 15분이 기본이지만, 운동 시간이 짧으면 근력운동 시간을 먼저 확보
+const cardioMin = (p) => { const c = SCHEME[p.goal].cardio; if (!c) return 0; return p.sessionMin >= 75 ? c : p.sessionMin >= 60 ? Math.min(c, 15) : 10; };
+
+const setMin = (it) => (it.rest + 45) / 60;
+
 export function buildPlan(p) {
   const split = splitFor(p.days);
-  const count = COUNT_BY_TIME[p.sessionMin] || 5;
   const seen = {};
   const sessions = split.keys.map((key) => {
     const variant = seen[key] = (seen[key] ?? -1) + 1;
-    const used = new Set();
-    const items = [];
-    for (const slot of T[key].slots) {
-      if (items.length >= count) break;
-      const ex = pick(slot, p, used, variant);
-      if (!ex) continue;
-      used.add(ex.id);
-      items.push(itemFor(ex, p));
-    }
-    return { key, name: T[key].name + (variant ? ' (2)' : ''), items, cardio: SCHEME[p.goal].cardio };
+    return { key, name: T[key].name + (variant ? ' (2)' : ''), items: chooseItems(key, p, variant, p.sessionMin, cardioMin(p)), cardio: cardioMin(p) };
   });
-  return { goal: p.goal, days: p.days, sessionMin: p.sessionMin, split: split.name, sessions, next: 0, createdAt: today(), deloadEvery: 6, skipDeloadWeek: null };
+  const plan = { rules: PLAN_RULES, goal: p.goal, days: p.days, sessionMin: p.sessionMin, split: split.name, sessions, next: 0, createdAt: today(), deloadEvery: 6, skipDeloadWeek: null };
+  const budget = p.sessionMin;
+  const minSets = (it) => (byId[it.exId].compound ? 3 : 2);
+  const cap = (it) => (byId[it.exId].compound ? 5 : 4);
+
+  // 1) 정한 시간을 넘으면 세트를 덜고, 그래도 넘으면 뒤쪽 보조 종목을 뺀다 (팔 운동은 남김)
+  for (const s of sessions) {
+    let guard = 50;
+    while (minutes(s) > budget + 2 && guard--) {
+      const cand = s.items.filter((it) => it.sets > minSets(it)).sort((a, b) => b.sets - a.sets || byId[a.exId].compound - byId[b.exId].compound)[0];
+      if (cand) { cand.sets--; continue; }
+      // 빼는 순서: 팔이 아닌 보조 동작 → 같은 세션에 같은 부위가 겹치는 동작. 부위 하나뿐인 큰 동작은 남긴다
+      const grp = (it) => GROUP[byId[it.exId].muscle] || byId[it.exId].muscle;
+      const list = s.items.map((it, i) => ({ it, i })).reverse().filter(({ it }) => !ARMS.has(byId[it.exId].muscle));
+      const drop = list.find(({ it }) => !byId[it.exId].compound)
+        || list.find(({ it }) => s.items.filter((x) => grp(x) === grp(it)).length > 1);
+      if (!drop) break;
+      s.items.splice(drop.i, 1);
+    }
+  }
+  // 2) 주간 세트가 목표보다 적은 부위부터, 시간 여유가 있는 세션에 세트를 더한다
+  const target = weeklyTargets(p.goal);
+  for (let guard = 0; guard < 300; guard++) {
+    const have = weeklySets(plan);
+    const groups = Object.keys(target).filter((g) => (have[g] || 0) < target[g]).sort((a, b) => (have[a] || 0) / target[a] - (have[b] || 0) / target[b]);
+    let added = false;
+    for (const g of groups) {
+      const cands = sessions.flatMap((s) => s.items.filter((it) => GROUP[byId[it.exId].muscle] === g && it.sets < cap(it) && minutes(s) + setMin(it) <= budget).map((it) => ({ s, it })))
+        .sort((a, b) => a.it.sets - b.it.sets || minutes(a.s) - minutes(b.s));
+      if (cands.length) { cands[0].it.sets++; added = true; break; }
+    }
+    if (!added) break;
+  }
+  return plan;
 }
 
 export function swapOptions(exId, p) {

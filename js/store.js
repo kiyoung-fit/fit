@@ -2,10 +2,21 @@
 import * as db from './db.js';
 import { targets, adaptiveTdee, today, addDays, kcalFromMet } from './calc.js';
 import { byId } from './data/exercises.js';
+import { buildPlan, PLAN_RULES } from './planner.js';
 
 export const getProfile = () => db.kv('profile');
 export const saveProfile = (p) => db.setKv('profile', p);
-export const getPlan = () => db.kv('plan');
+// 플랜 규칙이 바뀌면 예전 플랜을 새 규칙으로 다시 짠다 (진행 순서와 디로드 주기는 이어받음)
+export async function getPlan() {
+  const plan = await db.kv('plan');
+  if (!plan || (plan.rules || 1) >= PLAN_RULES) return plan;
+  const profile = await getProfile();
+  if (!profile) return plan;
+  const next = { ...buildPlan(profile), next: plan.next, createdAt: plan.createdAt, skipDeloadWeek: plan.skipDeloadWeek };
+  await db.setKv('plan', next);
+  await db.setKv('planUpgraded', true);
+  return next;
+}
 export const savePlan = (p) => db.setKv('plan', p);
 
 export async function bodyLog() {

@@ -1,7 +1,8 @@
 import { esc, icon, sheet, confirmSheet, exThumb, exAnim } from '../ui.js';
 import { GOALS, EXPERIENCE, INJURY, today, addDays, fmt, parseYmd } from '../calc.js';
 import { byId, EQUIP } from '../data/exercises.js';
-import { buildPlan, splitFor, deloadState, swapOptions, minutes, itemFor } from '../planner.js';
+import { buildPlan, splitFor, deloadState, swapOptions, minutes, itemFor, weeklySets, weeklyTargets } from '../planner.js';
+import * as db from '../db.js';
 import { getPlan, savePlan, saveProfile, dailyTargets, workouts, historyOf } from '../store.js';
 import { exerciseInfo } from './workout.js';
 
@@ -54,8 +55,13 @@ export async function render(root, ctx) {
   const dl = deloadState(plan);
   const all = await workouts();
   const phase = p.phase;
+  const upgraded = await db.kv('planUpgraded');
+  if (upgraded) await db.del('kv', 'planUpgraded');
+  const have = weeklySets(plan), want = weeklyTargets(p.goal);
+  const GN = { chest: '가슴', back: '등', shoulders: '어깨', quads: '허벅지 앞', hinge: '엉덩이·허벅지 뒤', biceps: '이두', triceps: '삼두' };
 
   root.innerHTML = `
+    ${upgraded ? '<p class="note note--accent">플랜 규칙이 바뀌어서 새로 짰어요. 팔 운동이 모든 상체 세션에 들어가고, 부위별 주간 세트 수를 목표에 맞춰 늘렸어요. 지금까지 든 무게는 그대로 이어서 추천해요.</p>' : ''}
     <section class="block" aria-labelledby="goal-h">
       <div class="block-head"><h2 id="goal-h">${esc(GOALS[p.goal].name)}</h2>
         <button type="button" class="btn btn--small" data-act="change-goal">목적 바꾸기</button></div>
@@ -87,9 +93,18 @@ export async function render(root, ctx) {
       ${s.cardio ? `<p class="muted">마무리 유산소 <span class="measure">${s.cardio}</span>분</p>` : ''}
     </section>`).join('')}
 
+    <section class="block" aria-labelledby="vol-h">
+      <div class="block-head"><h2 id="vol-h">부위별 주간 세트</h2><span class="muted">목표</span></div>
+      <table class="table"><tbody>${Object.keys(GN).map((g) => `<tr><th scope="row">${GN[g]}</th>
+        <td class="measure">${Math.round(have[g] || 0)}세트</td><td class="measure muted">${want[g]}세트 이상</td></tr>`).join('')}</tbody></table>
+      ${Object.keys(GN).some((g) => (have[g] || 0) < want[g] - 0.5) ? `<p class="fine">목표보다 적은 부위는 한 번 운동 시간(${p.sessionMin}분) 안에 다 넣지 못한 거예요. 시간을 늘리면 채워져요.</p>` : ''}
+    </section>
+
     <section class="block">
       <h2>규칙</h2>
       <ul class="rules">
+        <li>위쪽 몸을 쓰는 세션에는 팔 운동(이두·삼두)이 꼭 들어가요.</li>
+        <li>부위마다 주 ${want.chest}세트 이상이 되도록, 정한 운동 시간 안에서 세트를 늘려요.</li>
         <li>목표 반복수 윗값을 모든 세트에서 채우면 다음엔 상체 2.5kg, 하체 5kg 올려요.</li>
         <li>같은 무게에서 3번 연속 아랫값을 못 채우면 10% 낮춰 다시 쌓아요.</li>
         <li>${plan.deloadEvery}주마다 1주는 무게 10%, 세트 1개를 줄여 회복해요.</li>

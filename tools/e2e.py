@@ -110,6 +110,11 @@ with sync_playwright() as p:
       return { ok, rejected, n };
     }""")
     print("backup:", res)
+    # 예전 규칙 플랜이 새 규칙으로 바뀌는지
+    pg.evaluate("import('./js/db.js').then(async db => { const p = await db.kv('plan'); delete p.rules; await db.setKv('plan', p); })")
+    pg.goto(URL + "#/plan"); pg.wait_for_timeout(800); shot(pg, "19-plan-upgraded")
+    print("upgrade note:", pg.is_visible(".note--accent"), "| weekly:", " ".join(pg.inner_text("section[aria-labelledby=vol-h] table").split()))
+    print("arms in upper:", pg.evaluate("[...document.querySelectorAll('.block')].filter(b => b.querySelector('h2')?.textContent.startsWith('상체')).map(b => /컬|트라이셉스|푸시다운|익스텐션/.test(b.textContent))"))
     # 휴식 끝: 삐 3번(오실레이터 3개), 화면 깜빡임 5번
     pg.evaluate("""() => { window.__osc = 0; const C = window.AudioContext; const orig = C.prototype.createOscillator;
       C.prototype.createOscillator = function () { window.__osc++; return orig.call(this); }; }""")
