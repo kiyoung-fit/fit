@@ -47,6 +47,7 @@ with sync_playwright() as p:
         pg.goto(URL + "#/" + tab); pg.wait_for_timeout(600); shot(pg, f"06-{tab}")
     # 운동
     pg.goto(URL + "#/workout"); pg.wait_for_timeout(600); shot(pg, "07-workout-start")
+    print("broken thumbs:", pg.evaluate("[...document.querySelectorAll('.ex-thumb img')].filter(i => i.complete && i.naturalWidth === 0).length"))
     pg.click("[data-act=start]"); pg.wait_for_timeout(600)
     # 첫 종목 무게 입력 후 세트 완료
     first = pg.locator(".ex").first
@@ -60,6 +61,9 @@ with sync_playwright() as p:
     shot(pg, "08-session")
     print("rest visible:", pg.is_visible("#rest"), pg.inner_text(".rest-time"))
     pg.click("[data-act=swap] >> nth=1"); pg.wait_for_timeout(300); shot(pg, "09-swap"); pg.click("dialog [data-act=close]")
+    pg.click(".ex-title >> nth=0"); pg.wait_for_timeout(900); pg.screenshot(path=str(OUT / "09b-info.png"))
+    print("anim imgs loaded:", pg.evaluate("[...document.querySelectorAll('dialog .ex-anim img')].map(i => i.naturalWidth)"))
+    pg.click("dialog [data-act=close]")
     pg.click("[data-act=add-cardio]"); pg.wait_for_timeout(300); shot(pg, "10-cardio"); pg.click("dialog [data-act=save]"); pg.wait_for_timeout(300)
     pg.click("[data-act=finish]"); pg.wait_for_timeout(800); shot(pg, "11-finish")
     print("finish:", pg.inner_text("dialog .stats").replace("\n", " "))

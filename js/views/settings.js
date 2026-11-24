@@ -48,6 +48,7 @@ export async function render(root, ctx) {
       <div class="block-head"><h2 id="ab-h">안내</h2></div>
       <ul class="rules">
         <li>음식 영양 정보: 식품의약품안전처 식품영양성분 데이터베이스 (공공데이터포털). 시판 제품과 술은 제품 라벨 평균값이에요.</li>
+        <li>운동 사진: free-exercise-db (퍼블릭 도메인) 사진을 앱 색에 맞게 바꿔 사용했어요. 머신 종류가 헬스장과 조금 다를 수 있어요.</li>
         <li>칼로리 계산: Mifflin-St Jeor, 체지방률이 있으면 Katch-McArdle. 운동 칼로리는 MET 기준 추정치예요.</li>
         <li>이 앱은 의료 기기가 아니에요. 질환이 있거나 약을 먹고 있다면 식단과 운동을 크게 바꾸기 전에 의사와 상담하세요.</li>
       </ul>

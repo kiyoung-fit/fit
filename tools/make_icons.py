@@ -2,10 +2,10 @@
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parent.parent
-# 따뜻한 검정 바탕 + 주황 덤벨 (Rim 테마 색)
+# 흰빛 바탕 + 파란 덤벨 (앱 색)
 SVG = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<rect width="512" height="512" fill="#110e0b"/>
-<g fill="#f47a3a"><rect x="96" y="176" width="44" height="160"/><rect x="152" y="140" width="44" height="232"/>
+<rect width="512" height="512" fill="#f4f7fb"/>
+<g fill="#2f62d9"><rect x="96" y="176" width="44" height="160"/><rect x="152" y="140" width="44" height="232"/>
 <rect x="316" y="140" width="44" height="232"/><rect x="372" y="176" width="44" height="160"/>
 <rect x="196" y="238" width="120" height="36"/></g></svg>'''
 SIZES = {"icon-192.png": 192, "icon-512.png": 512, "apple-touch-icon.png": 180, "icon-maskable-512.png": 512}

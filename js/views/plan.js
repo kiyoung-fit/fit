@@ -1,4 +1,4 @@
-import { esc, icon, sheet, confirmSheet } from '../ui.js';
+import { esc, icon, sheet, confirmSheet, exThumb, exAnim } from '../ui.js';
 import { GOALS, EXPERIENCE, INJURY, today, addDays, fmt, parseYmd } from '../calc.js';
 import { byId, EQUIP } from '../data/exercises.js';
 import { buildPlan, splitFor, deloadState, swapOptions, minutes, itemFor } from '../planner.js';
@@ -80,7 +80,7 @@ export async function render(root, ctx) {
         const ex = byId[it.exId];
         const last = historyOf(all, it.exId)[0];
         const top = last ? Math.max(0, ...last.sets.filter((x) => !x.warm).map((x) => x.w || 0)) : 0;
-        return `<li><button type="button" class="row" data-act="item" data-s="${i}" data-j="${j}">
+        return `<li><button type="button" class="row" data-act="item" data-s="${i}" data-j="${j}">${exThumb(ex.id)}
           <span class="row-main"><span>${esc(ex.name)}</span><span class="muted">${EQUIP[ex.equip]}${top ? `, 최근 ${top}kg` : ''}</span></span>
           <span class="row-side measure">${it.sets}×${it.lo}-${it.hi}</span></button></li>`;
       }).join('')}</ul>
@@ -112,9 +112,10 @@ export async function render(root, ctx) {
       const it = s.items[j];
       const opts = swapOptions(it.exId, p);
       sheet({ title: byId[it.exId].name, wide: true,
-        body: `<div class="row-actions row-actions--plain"><button type="button" class="btn" data-act="info">자세 요점과 기록 보기</button></div>
+        body: `${exAnim(it.exId, byId[it.exId].name)}
+          <div class="row-actions row-actions--plain"><button type="button" class="btn" data-act="info">자세 요점과 기록 보기</button></div>
           <h3 class="sheet-sub">다른 종목으로 바꾸기</h3>
-          <ul class="rows">${opts.map((o) => `<li><button type="button" class="row" data-act="pick" data-id="${o.id}">
+          <ul class="rows">${opts.map((o) => `<li><button type="button" class="row" data-act="pick" data-id="${o.id}">${exThumb(o.id)}
             <span class="row-main"><span>${esc(o.name)}</span><span class="muted">${EQUIP[o.equip]}${o.hurts ? ', 아픈 부위에 부담' : ''}</span></span></button></li>`).join('')}</ul>`,
         actions: {
           info: (_, __, close) => { close(); exerciseInfo(it.exId, all); },

@@ -1,5 +1,5 @@
 import * as db from '../db.js';
-import { esc, icon, stepper, num, sheet, confirmSheet, notice, startRest, stopRest, keepAwake } from '../ui.js';
+import { esc, icon, stepper, num, sheet, confirmSheet, notice, startRest, stopRest, keepAwake, exThumb, exAnim } from '../ui.js';
 import { EXERCISES, MUSCLES, EQUIP, CARDIO, byId } from '../data/exercises.js';
 import { suggest, warmups, recommend, deloadState, swapOptions, bestSet, minutes as estMinutes } from '../planner.js';
 import { getPlan, savePlan, workouts as allWorkouts, historyOf, currentWeight, workoutKcal } from '../store.js';
@@ -28,9 +28,9 @@ async function renderStart(root, ctx) {
   const items = s ? s.items.map((it) => {
     const ex = byId[it.exId];
     const sug = suggest(it, historyOf(all, it.exId), dl?.isDeload);
-    return `<li class="plan-row"><span class="plan-name">${esc(ex.name)}</span>
+    return `<li><button type="button" class="plan-row" data-act="info" data-ex="${ex.id}">${exThumb(ex.id)}<span class="plan-name">${esc(ex.name)}</span>
       <span class="plan-scheme measure">${dl?.isDeload ? Math.max(2, it.sets - 1) : it.sets}×${it.lo}-${it.hi}</span>
-      <span class="plan-weight measure">${sug.weight ? `${sug.weight}kg` : ''}</span></li>`;
+      <span class="plan-weight measure">${sug.weight ? `${sug.weight}kg` : ''}</span></button></li>`;
   }).join('') : '';
 
   const exHist = [...new Set(all.flatMap((w) => w.exercises.map((e) => e.exId)))]
@@ -63,7 +63,7 @@ async function renderStart(root, ctx) {
 
     ${exHist.length ? `<section class="block" aria-labelledby="ex-h">
       <div class="block-head"><h2 id="ex-h">종목별 기록</h2><span class="muted">추정 1RM</span></div>
-      <ul class="rows">${exHist.sort((a, b) => b.best - a.best).map((x) => `<li><button type="button" class="row" data-act="info" data-ex="${x.id}">
+      <ul class="rows">${exHist.sort((a, b) => b.best - a.best).map((x) => `<li><button type="button" class="row" data-act="info" data-ex="${x.id}">${exThumb(x.id)}
         <span class="row-main"><span>${esc(byId[x.id].name)}</span></span><span class="row-side measure">${x.best ? fmt(x.best, 1) + 'kg' : '-'}</span></button></li>`).join('')}</ul>
     </section>` : ''}`;
 
@@ -122,7 +122,7 @@ function renderActive(root, ctx, a) {
     const ex = byId[e.exId];
     return `<article class="ex" data-k="${k}">
       <header class="ex-head">
-        <button type="button" class="ex-name" data-act="info">${esc(ex.name)}</button>
+        <button type="button" class="ex-title" data-act="info">${exThumb(ex.id)}<span class="ex-name">${esc(ex.name)}</span></button>
         <div class="ex-tools">
           <button type="button" class="icon-btn" data-act="swap" aria-label="${esc(ex.name)} 다른 종목으로 바꾸기">${icon('swap')}</button>
           <button type="button" class="icon-btn" data-act="remove" aria-label="${esc(ex.name)} 빼기">${icon('trash')}</button>
@@ -220,7 +220,7 @@ function renderActive(root, ctx, a) {
     const opts = swapOptions(cur.exId, ctx.profile);
     sheet({ title: `${byId[cur.exId].name} 대신`, wide: true,
       body: `<p class="sheet-text muted">같은 동작이 먼저, 같은 부위가 그다음이에요. 무게 기록은 종목마다 따로 쌓여요.</p>
-        <ul class="rows">${opts.map((o) => `<li><button type="button" class="row" data-act="pick" data-id="${o.id}">
+        <ul class="rows">${opts.map((o) => `<li><button type="button" class="row" data-act="pick" data-id="${o.id}">${exThumb(o.id)}
         <span class="row-main"><span>${esc(o.name)}</span><span class="muted">${EQUIP[o.equip]}${o.hurts ? ', 아픈 부위에 부담' : ''}</span></span></button></li>`).join('')}</ul>`,
       actions: { pick: async (el, _, close) => {
         close();
@@ -236,7 +236,7 @@ function renderActive(root, ctx, a) {
 
   function addSheet() {
     let muscle = 'chest';
-    const list = () => EXERCISES.filter((e) => e.muscle === muscle).map((e) => `<li><button type="button" class="row" data-act="pick" data-id="${e.id}">
+    const list = () => EXERCISES.filter((e) => e.muscle === muscle).map((e) => `<li><button type="button" class="row" data-act="pick" data-id="${e.id}">${exThumb(e.id)}
       <span class="row-main"><span>${esc(e.name)}</span><span class="muted">${EQUIP[e.equip]}</span></span>${icon('plus')}</button></li>`).join('');
     const s = sheet({ title: '종목 추가', wide: true,
       body: `<div class="chips" role="group" aria-label="부위">${Object.entries(MUSCLES).map(([k, v]) => `<button type="button" class="chip" data-act="m" data-m="${k}" aria-pressed="${k === muscle}">${v}</button>`).join('')}</div>
@@ -350,7 +350,8 @@ export function exerciseInfo(exId, all) {
   const best = points.reduce((m, x) => (x.y > (m?.y || 0) ? x : m), null);
   const top = hist.flatMap((h) => h.sets.filter((s) => s.done && !s.warm)).reduce((m, s) => (!m || (s.w || 0) > (m.w || 0) ? s : m), null);
   sheet({ title: ex.name, wide: true,
-    body: `<p class="muted">${esc(ex.muscles)}, ${EQUIP[ex.equip]}</p>
+    body: `${exAnim(ex.id, ex.name)}
+      <p class="muted">${esc(ex.muscles)}, ${EQUIP[ex.equip]}</p>
       <ol class="tips">${ex.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
       ${points.length ? `<dl class="stats"><div><dt>추정 1RM 최고</dt><dd class="measure">${fmt(best.y, 1)}<small>kg</small></dd></div>
         <div><dt>최고 무게</dt><dd class="measure">${top?.w ?? '-'}<small>kg × ${top?.r ?? ''}</small></dd></div>

@@ -24,6 +24,12 @@ const P = {
 export const icon = (name, label = '') =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" ${label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"'}>${P[name]}</svg>`;
 
+// 운동 사진: 같은 파란 톤으로 바꾼 시작·끝 자세 2장 (tools/make_ex_images.py)
+export const exThumb = (id) => `<span class="ex-thumb" aria-hidden="true"><img src="img/ex/${id}-0.webp" alt="" width="72" height="48" loading="lazy" decoding="async"></span>`;
+export const exAnim = (id, name) => `<figure class="ex-anim" role="img" aria-label="${esc(name)} 시작 자세와 끝 자세">
+  <img src="img/ex/${id}-0.webp" alt="" width="480" height="320" decoding="async">
+  <img class="ex-anim-b" src="img/ex/${id}-1.webp" alt="" width="480" height="320" decoding="async"></figure>`;
+
 // 숫자 +/− 조절기. 가운데 숫자를 누르면 키보드로 직접 입력
 export function stepper({ name, value, step = 1, min = 0, unit = '', label, decimal = false }) {
   return `<div class="stepper" data-step="${step}" data-min="${min}">
