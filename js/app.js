@@ -47,7 +47,7 @@ window.addEventListener('hashchange', route);
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') keepAwake(!!(await db.kv('active')));
 });
-document.addEventListener('pointerdown', unlockAudio, { once: true });
+document.addEventListener('click', unlockAudio, { once: true });
 
 document.getElementById('rest').addEventListener('click', (e) => {
   const b = e.target.closest('[data-rest]');

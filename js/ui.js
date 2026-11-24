@@ -101,22 +101,42 @@ export function notice(text) {
 }
 
 // ---------- 휴식 타이머: 끝나는 시각을 저장해 두고 남은 시간을 계산 ----------
+// 아이폰은 '터치를 뗀 순간(click)'에 깨운 소리만 허락한다. 그래서 세트 완료 버튼을 누를 때마다
+// 소리를 깨우고(resume) 무음 한 조각을 재생해 잠금을 푼다. 무음 스위치가 켜져 있으면 소리는 나지 않는다.
 let audio;
 export function unlockAudio() {
-  if (audio) return;
-  try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { /* 소리 없이 진행 */ }
+  try {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state !== 'running') audio.resume();
+    const b = audio.createBuffer(1, 1, 22050), src = audio.createBufferSource();
+    src.buffer = b; src.connect(audio.destination); src.start(0);
+  } catch { /* 소리 없이 진행 */ }
 }
 function beep() {
   if (!audio) return;
-  const t0 = audio.currentTime;
+  if (audio.state !== 'running') audio.resume();
+  const t0 = audio.currentTime + 0.05;
   for (let i = 0; i < 3; i++) {
     const o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
-    g.gain.setValueAtTime(0.0001, t0 + i * 0.35);
-    g.gain.exponentialRampToValueAtTime(0.4, t0 + i * 0.35 + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.35 + 0.25);
-    o.start(t0 + i * 0.35); o.stop(t0 + i * 0.35 + 0.3);
+    o.type = 'square'; o.frequency.value = 1000; o.connect(g); g.connect(audio.destination);
+    g.gain.setValueAtTime(0.0001, t0 + i * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.6, t0 + i * 0.4 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.4 + 0.28);
+    o.start(t0 + i * 0.4); o.stop(t0 + i * 0.4 + 0.3);
   }
+}
+
+// 화면 깜빡임: CSS 애니메이션 대신 직접 켜고 꺼서, 아이폰 '동작 줄이기' 설정이 켜져 있어도 보이게 한다
+function flash(times = 5) {
+  const ov = document.getElementById('flash'), bar = document.getElementById('rest');
+  let n = 0;
+  clearInterval(flash.t);
+  flash.t = setInterval(() => {
+    const on = n % 2 === 0;
+    ov.classList.toggle('flash--on', on);
+    bar.classList.toggle('rest--on', on);
+    if (++n >= times * 2) { clearInterval(flash.t); ov.classList.remove('flash--on'); bar.classList.remove('rest--on'); }
+  }, 250);
 }
 
 const rest = { end: 0, total: 0, tick: null };
@@ -143,6 +163,8 @@ function runRest() {
   clearInterval(rest.tick);
   const bar = document.getElementById('rest');
   bar.hidden = false; document.body.classList.add('has-rest');
+  bar.classList.remove('rest--done');
+  bar.querySelector('.rest-label').textContent = '휴식';
   paintRest();
   rest.tick = setInterval(paintRest, 250);
 }
@@ -154,8 +176,10 @@ function paintRest() {
   if (left <= 0) {
     clearInterval(rest.tick);
     beep();
+    flash(5);
     bar.classList.add('rest--done');
-    setTimeout(() => { bar.classList.remove('rest--done'); stopRest(); }, 2500);
+    bar.querySelector('.rest-label').textContent = '휴식 끝';
+    setTimeout(() => { bar.classList.remove('rest--done'); stopRest(); }, 3000);
   }
 }
 

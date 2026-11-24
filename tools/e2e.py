@@ -106,6 +106,17 @@ with sync_playwright() as p:
       return { ok, rejected, n };
     }""")
     print("backup:", res)
+    # 휴식 끝: 삐 3번(오실레이터 3개), 화면 깜빡임 5번
+    pg.evaluate("""() => { window.__osc = 0; const C = window.AudioContext; const orig = C.prototype.createOscillator;
+      C.prototype.createOscillator = function () { window.__osc++; return orig.call(this); }; }""")
+    pg.click("#settings-link"); pg.wait_for_timeout(300)  # 클릭으로 소리 깨우기
+    pg.evaluate("import('./js/ui.js').then(u => { u.unlockAudio(); u.startRest(1); })")
+    pg.wait_for_timeout(300); shot(pg, "18-rest-bar")
+    seen = 0
+    for _ in range(14):
+        pg.wait_for_timeout(125)
+        seen += pg.evaluate("document.getElementById('flash').classList.contains('flash--on')")
+    print("rest end: beeps", pg.evaluate("window.__osc"), "flash frames on", seen, "label", pg.inner_text(".rest-label"))
     b.close()
 srv.shutdown()
 print("ERRORS:", errors if errors else "none")

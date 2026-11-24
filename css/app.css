@@ -3,6 +3,7 @@
  * axes: dark/grotesk-sans/warm · posture: committed · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V4 · weakest: P, a logbook can drift into a generic tracker; every number that measures (kg, reps, kcal, time) is Geist Mono at figure size so the screen reads as an instrument */
 /* Hallmark · waive 1 · --font-display is the iPhone system face · Korean labels need Hangul that Switzer lacks, and Apple SD Gothic Neo is what the phone already renders */
+/* Hallmark · dismissed 23 · .flash is the rest-over alert, at full accent for 2.5s only when the timer ends, transparent otherwise */
 /* Hallmark · waive 39b · --control is 48px, steppers and checks · sets are logged mid-workout with sweaty fingers, so every gym control stays 48px */
 @import url("./tokens.css");
 @import url("./base.css");
@@ -14,7 +15,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --topbar: 52px;
-  --rest-h: 56px;
+  --rest-h: 128px;
   --app-max: 560px;
 }
 
@@ -316,20 +317,26 @@ input[type="date"] { font-family: var(--font-outlier); }
 .check[aria-pressed="true"] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); }
 .check .icon { width: 26px; height: 26px; }
 
-/* ---------- rest timer ---------- */
+/* ---------- rest timer (2단: 큰 시간 + 큰 버튼) ---------- */
 .rest {
   position: fixed; inset-inline: 0; bottom: calc(var(--tabbar) + var(--safe-bottom)); z-index: var(--z-sticky);
-  display: flex; align-items: center; gap: var(--space-xs); height: var(--rest-h); padding: 0 var(--space-md);
-  background: var(--color-paper-3); border-top: var(--rule-hair) solid var(--color-accent); overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center; gap: var(--space-xs); height: var(--rest-h); padding: var(--space-xs) var(--space-md);
+  background: var(--color-paper-3); border-top: 2px solid var(--color-accent); overflow: hidden;
 }
 .rest-fill { position: absolute; inset: 0; background: var(--color-flash); transform-origin: left; transform: scaleX(0); z-index: -1; }
-.rest-label { color: var(--color-muted); font-size: var(--text-sm); }
-.rest-time { font-size: var(--text-figure-s); margin-inline-end: auto; min-width: 3.5ch; }
-.rest .btn--small { min-height: 40px; padding: 0 var(--space-xs); }
-.rest--done { animation: flash 0.5s steps(2, jump-none) 5; }
-@keyframes flash { from { background: var(--color-paper-3); } to { background: var(--color-accent); } }
-.rest--done .rest-time, .rest--done .rest-label { color: var(--color-ink); }
-@media (prefers-reduced-motion: reduce) { .rest--done { animation: none; background: var(--color-accent); } .rest--done .rest-time, .rest--done .rest-label { color: var(--color-accent-ink); } }
+.rest-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); width: 100%; max-width: var(--app-max); margin-inline: auto; }
+.rest-label { color: var(--color-ink-2); font-size: var(--text-lg); }
+.rest-time { font-size: var(--text-figure-l); line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.rest-btns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs); width: 100%; max-width: var(--app-max); margin-inline: auto; }
+.rest-btns .btn { min-height: var(--control); padding: 0 var(--space-xs); }
+.rest--done { background: var(--color-accent); }
+.rest--done .rest-fill { opacity: 0; }
+.rest--done .rest-time, .rest--done .rest-label { color: var(--color-accent-ink); }
+.rest--done .btn { color: var(--color-accent-ink); border-color: var(--color-accent-ink); }
+.rest--on { background: var(--color-ink); }
+.rest--on .rest-time, .rest--on .rest-label { color: var(--color-paper); }
+.flash { position: fixed; inset: 0; z-index: var(--z-toast); pointer-events: none; background: var(--color-accent); opacity: 0; }
+.flash--on { opacity: 0.45; }
 
 /* ---------- notice ---------- */
 .notice {

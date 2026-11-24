@@ -1,5 +1,5 @@
 // 오프라인 동작: 앱 파일은 미리 저장, 새 버전이 있으면 다음 실행 때 반영
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `my-health-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest',

@@ -33,12 +33,14 @@
 
   <div id="rest" class="rest" hidden role="timer" aria-live="off">
     <div class="rest-fill" aria-hidden="true"></div>
-    <span class="rest-label">휴식</span>
-    <span class="rest-time measure">0:00</span>
-    <button type="button" class="btn btn--small" data-rest="-15">-15초</button>
-    <button type="button" class="btn btn--small" data-rest="15">+15초</button>
-    <button type="button" class="btn btn--small" data-rest="skip">건너뛰기</button>
+    <div class="rest-top"><span class="rest-label">휴식</span><span class="rest-time measure">0:00</span></div>
+    <div class="rest-btns">
+      <button type="button" class="btn" data-rest="-15">-15초</button>
+      <button type="button" class="btn" data-rest="15">+15초</button>
+      <button type="button" class="btn" data-rest="skip">건너뛰기</button>
+    </div>
   </div>
+  <div id="flash" class="flash" aria-hidden="true"></div>
 
   <p id="notice" class="notice" role="status" hidden></p>
 
