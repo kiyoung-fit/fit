@@ -13,7 +13,8 @@ export function render(root, { done }) {
 
   const STEPS = [
     { id: 'intro', render: () => `<h2 class="q">내 몸에 맞춘 운동·식단 기록을 시작해요.</h2>
-        <p class="why">몇 가지만 물어볼게요. 1분이면 끝나요. 입력한 정보와 기록은 이 폰 안에만 저장되고 어디에도 보내지 않아요.</p>`, next: '시작하기' },
+        <p class="why">몇 가지만 물어볼게요. 1분이면 끝나요. 입력한 정보와 기록은 이 폰 안에만 저장되고 어디에도 보내지 않아요.</p>
+        ${/iPhone|iPad/.test(navigator.userAgent) && !navigator.standalone ? `<p class="note note--warn">지금은 사파리 안에서 열려 있어요. 사파리에서 입력한 기록은 홈 화면 앱으로 옮겨지지 않아요. 먼저 아래 공유 버튼에서 "홈 화면에 추가"를 누르고, 홈 화면 아이콘으로 다시 열어서 시작하세요.</p>` : ''}`, next: '시작하기' },
     { id: 'sex', render: () => `<h2 class="q">성별</h2><p class="why">남녀는 같은 체중이어도 기초대사량 계산식이 달라요.</p>
         <div class="choices">${choice('sex', 'm', '남성', '', p.sex === 'm')}${choice('sex', 'f', '여성', '', p.sex === 'f')}</div>`, ok: () => p.sex },
     { id: 'birth', render: () => `<h2 class="q">생년월일</h2><p class="why">나이가 들수록 기초대사량이 줄어서 필요해요. 생일이 지나면 나이는 자동으로 바뀌어요.</p>
