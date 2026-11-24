@@ -68,6 +68,13 @@ with sync_playwright() as p:
     pg.click("[data-act=finish]"); pg.wait_for_timeout(800); shot(pg, "11-finish")
     print("finish:", pg.inner_text("dialog .stats").replace("\n", " "))
     pg.click("dialog [data-act=close]"); pg.wait_for_timeout(400)
+    # 유산소 따로 기록
+    pg.goto(URL + "#/workout"); pg.wait_for_timeout(600)
+    pg.click("[data-act=cardio]"); pg.wait_for_timeout(300)
+    pg.click("dialog [data-t=cycle]"); pg.click("dialog [data-act=save]"); pg.wait_for_timeout(700)
+    shot(pg, "11b-cardio-logged")
+    print("cardio block:", " ".join(pg.inner_text("section[aria-labelledby=cardio-h]").split())[:120])
+    print("history top:", " ".join(pg.locator("section[aria-labelledby=hist-h] .row").first.inner_text().split()))
     # 식단
     pg.goto(URL + "#/food"); pg.wait_for_timeout(600)
     pg.click("[data-act=add][data-slot=lunch]"); pg.wait_for_timeout(300)

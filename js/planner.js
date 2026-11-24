@@ -70,7 +70,7 @@ export function itemFor(ex, p) {
   return { exId: ex.id, sets, lo, hi, rest: ex.compound ? sc.restC : sc.restI };
 }
 
-export const PLAN_RULES = 2;
+export const PLAN_RULES = 3;
 
 // 부위 묶음과 주간 목표 세트 수 (부위당 주 10세트 이상이 근육 유지·성장에 유리하다는 연구 기준)
 const GROUP = { chest: 'chest', back: 'back', shoulders: 'shoulders', quads: 'quads', hams: 'hinge', glutes: 'hinge', biceps: 'biceps', triceps: 'triceps' };
@@ -112,7 +112,9 @@ function chooseItems(key, p, variant, budget, cardio) {
 }
 
 // 유산소 시간: 감량 20분·유지 15분이 기본이지만, 운동 시간이 짧으면 근력운동 시간을 먼저 확보
-const cardioMin = (p) => { const c = SCHEME[p.goal].cardio; if (!c) return 0; return p.sessionMin >= 75 ? c : p.sessionMin >= 60 ? Math.min(c, 15) : 10; };
+// 유산소는 근력 세션과 따로 기록한다 (규칙 3). 근력 세션 시간은 전부 근력운동에 쓴다
+const cardioMin = () => 0;
+export const CARDIO_PLAN = { cut: { times: 3, min: 30 }, health: { times: 3, min: 30 }, bulk: { times: 2, min: 20 }, strength: { times: 2, min: 20 } };
 
 const setMin = (it) => (it.rest + 45) / 60;
 
@@ -123,7 +125,7 @@ export function buildPlan(p) {
     const variant = seen[key] = (seen[key] ?? -1) + 1;
     return { key, name: T[key].name + (variant ? ' (2)' : ''), items: chooseItems(key, p, variant, p.sessionMin, cardioMin(p)), cardio: cardioMin(p) };
   });
-  const plan = { rules: PLAN_RULES, goal: p.goal, days: p.days, sessionMin: p.sessionMin, split: split.name, sessions, next: 0, createdAt: today(), deloadEvery: 6, skipDeloadWeek: null };
+  const plan = { rules: PLAN_RULES, cardio: CARDIO_PLAN[p.goal], goal: p.goal, days: p.days, sessionMin: p.sessionMin, split: split.name, sessions, next: 0, createdAt: today(), deloadEvery: 6, skipDeloadWeek: null };
   const budget = p.sessionMin;
   const minSets = (it) => (byId[it.exId].compound ? 3 : 2);
   const cap = (it) => (byId[it.exId].compound ? 5 : 4);
@@ -242,10 +244,13 @@ export function bestSet(sets) {
 export function recommend(plan, workouts, on = today()) {
   if (!plan) return null;
   const n = plan.sessions.length;
-  const recent = workouts.filter((w) => daysBetween(w.date, on) <= 1 && daysBetween(w.date, on) >= 0);
+  const lifts = workouts.filter((w) => w.exercises.length);
+  const recent = lifts.filter((w) => daysBetween(w.date, on) <= 1 && daysBetween(w.date, on) >= 0);
   const tired = new Set(recent.flatMap((w) => w.exercises.map((e) => byId[e.exId]?.muscle)).filter(Boolean));
   const weekStart = (() => { const d = parseYmd(on); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); })();
-  const doneThisWeek = workouts.filter((w) => w.date >= weekStart && w.date <= on).length;
+  const doneThisWeek = lifts.filter((w) => w.date >= weekStart && w.date <= on).length;
+  const cardioThisWeek = workouts.filter((w) => w.date >= weekStart && w.date <= on && (w.cardio || []).length);
+  const cardio = { done: cardioThisWeek.length, minutes: cardioThisWeek.reduce((t, w) => t + w.cardio.reduce((u, c) => u + c.min, 0), 0), target: plan.cardio || CARDIO_PLAN[plan.goal] };
   const overlap = (s) => s.items.filter((it) => tired.has(byId[it.exId].muscle) && byId[it.exId].compound).length;
   let idx = plan.next % n;
   let note = '';
@@ -254,6 +259,6 @@ export function recommend(plan, workouts, on = today()) {
     if (alt != null && alt !== idx) { note = `${plan.sessions[idx].name}는 어제 쓴 부위와 겹쳐서 ${plan.sessions[alt].name}를 먼저 추천해요.`; idx = alt; }
     else note = '어제 쓴 부위가 아직 회복 중이에요. 무게를 조금 낮추거나 쉬어도 됩니다.';
   }
-  const trainedToday = workouts.some((w) => w.date === on);
-  return { idx, session: plan.sessions[idx], note, doneThisWeek, target: plan.days, trainedToday, weekDone: doneThisWeek >= plan.days };
+  const trainedToday = lifts.some((w) => w.date === on);
+  return { idx, session: plan.sessions[idx], note, doneThisWeek, cardio, target: plan.days, trainedToday, weekDone: doneThisWeek >= plan.days };
 }

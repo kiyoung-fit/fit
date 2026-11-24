@@ -45,7 +45,6 @@ async function renderStart(root, ctx) {
       ${rec.note ? `<p class="note">${esc(rec.note)}</p>` : ''}
       ${dl?.isDeload ? `<p class="note note--accent">이번 주는 가볍게 가는 주예요. 무게 10%, 세트 하나씩 줄였어요. <button type="button" class="link" data-act="skip-deload">이번 주는 그대로 하기</button></p>` : ''}
       <ul class="plan-list">${items}</ul>
-      ${s.cardio ? `<p class="muted">마무리 유산소 ${s.cardio}분</p>` : ''}
       <div class="row-actions">
         <button type="button" class="btn" data-act="pick">다른 세션</button>
         <button type="button" class="btn btn--primary btn--wide" data-act="start" data-idx="${rec.idx}">이 루틴으로 시작</button>
@@ -53,11 +52,17 @@ async function renderStart(root, ctx) {
     </section>` : `<section class="block"><p class="empty">플랜이 없어요. 플랜 탭에서 만들 수 있어요.</p></section>`}
     <div class="row-actions row-actions--plain"><button type="button" class="btn" data-act="blank">빈 운동으로 시작</button></div>
 
+    ${rec?.cardio?.target ? `<section class="block" aria-labelledby="cardio-h">
+      <div class="block-head"><h2 id="cardio-h">유산소</h2><span class="measure muted">${rec.cardio.done}/${rec.cardio.target.times}회</span></div>
+      <p class="muted">이번 주 <span class="measure">${rec.cardio.minutes}</span>분. 목표는 주 ${rec.cardio.target.times}회, 한 번에 ${rec.cardio.target.min}분이에요. 근력운동 없는 날이나 근력운동 뒤에 따로 기록하세요.</p>
+      <div class="row-actions row-actions--plain"><button type="button" class="btn btn--wide" data-act="cardio">유산소 기록하기</button></div>
+    </section>` : ''}
+
     <section class="block" aria-labelledby="hist-h">
       <div class="block-head"><h2 id="hist-h">지난 운동</h2><span class="measure muted">${all.length}회</span></div>
       ${all.length ? `<ul class="rows">${all.slice(0, 30).map((w) => `<li><button type="button" class="row" data-act="open" data-id="${w.id}">
         <span class="row-main"><span>${esc(w.name)}</span><span class="muted">${md(w.date)}</span></span>
-        <span class="row-side measure">${fmt(w.volume)}kg</span></button></li>`).join('')}</ul>`
+        <span class="row-side measure">${w.exercises.length ? `${fmt(w.volume)}kg` : `${fmt(w.kcal)}kcal`}</span></button></li>`).join('')}</ul>`
       : '<p class="empty">아직 기록이 없어요. 첫 운동을 시작하면 여기에 쌓여요.</p>'}
     </section>
 
@@ -73,6 +78,7 @@ async function renderStart(root, ctx) {
     const act = b.dataset.act;
     if (act === 'start') return start(Number(b.dataset.idx));
     if (act === 'blank') return start(null);
+    if (act === 'cardio') return logCardio(p, rec?.cardio?.target, () => ctx.refresh());
     if (act === 'pick') {
       sheet({ title: '세션 고르기', body: `<ul class="rows">${plan.sessions.map((x, i) => `<li><button type="button" class="row" data-act="go" data-idx="${i}">
         <span class="row-main"><span>${esc(x.name)}</span><span class="muted">${x.items.map((it) => esc(byId[it.exId].name)).slice(0, 3).join(', ')}</span></span></button></li>`).join('')}</ul>`,
@@ -93,7 +99,7 @@ async function renderStart(root, ctx) {
       const sets = Array.from({ length: n }, (_, k) => ({ w: sug.weight, r: sug.kind === 'up' ? it.lo : (lastWork[k]?.r ?? it.lo), done: false, warm: false }));
       return { exId: it.exId, target: { sets: n, lo: it.lo, hi: it.hi, rest: it.rest }, sug, sets: [...warmups(it.exId, sug.weight), ...sets] };
     }) : [];
-    const a = { id: db.uid(), date: today(), startedAt: Date.now(), planIdx: idx, name: session ? session.name : '자유 운동', cardioPlan: session?.cardio || 0, exercises, cardio: [] };
+    const a = { id: db.uid(), date: today(), startedAt: Date.now(), planIdx: idx, name: session ? session.name : '자유 운동', exercises, cardio: [] };
     await db.setKv('active', a);
     keepAwake(true);
     ctx.refresh();
@@ -149,7 +155,6 @@ function renderActive(root, ctx, a) {
         <span class="row-main"><span>${esc(CARDIO.find((x) => x.id === c.type).name)}</span><span class="muted measure">${c.min}분${c.speed ? `, ${c.speed}km/h` : ''}${c.incline ? `, 경사 ${c.incline}` : ''}</span></span>
         <span class="row-side measure">${c.kcal}kcal</span>
         <button type="button" class="icon-btn" data-act="del-cardio" data-i="${i}" aria-label="유산소 기록 지우기">${icon('trash')}</button></li>`).join('')}</ul></section>` : ''}
-      ${a.cardioPlan && !a.cardio.length ? `<p class="note">마무리 유산소 ${a.cardioPlan}분이 플랜에 있어요.</p>` : ''}
       <div class="row-actions">
         <button type="button" class="btn" data-act="add-ex">${icon('plus')}종목</button>
         <button type="button" class="btn" data-act="add-cardio">${icon('plus')}유산소</button>
@@ -256,32 +261,8 @@ function renderActive(root, ctx, a) {
       } });
   }
 
-  async function cardioSheet() {
-    const weight = await currentWeight(ctx.profile);
-    let type = 'treadmill';
-    const kcalOf = (f) => {
-      const c = CARDIO.find((x) => x.id === type);
-      return kcalFromMet(c.met(num(f.speed?.value), num(f.incline?.value)), weight, num(f.min.value) || 0);
-    };
-    const fields = () => `${stepper({ name: 'min', value: a.cardioPlan || 20, step: 5, unit: '분', label: '시간' })}
-      ${type === 'treadmill' ? `<div class="field"><span class="field-label">속도</span>${stepper({ name: 'speed', value: 6, step: 0.5, unit: 'km/h', label: '속도', decimal: true })}</div>
-        <div class="field"><span class="field-label">경사</span>${stepper({ name: 'incline', value: 0, step: 1, unit: '%', label: '경사' })}</div>` : ''}`;
-    const s = sheet({ title: '유산소 추가',
-      body: `<div class="chips" role="group" aria-label="종류">${CARDIO.map((c) => `<button type="button" class="chip" data-act="t" data-t="${c.id}" aria-pressed="${c.id === type}">${c.name}</button>`).join('')}</div>
-        <div id="cardio-fields">${fields()}</div>
-        <p class="calc-line">약 <span class="measure" id="cardio-kcal">0</span>kcal</p>
-        <button type="button" class="btn btn--primary btn--wide" data-act="save">추가</button>`,
-      onInput: (_, f) => { s.body.querySelector('#cardio-kcal').textContent = kcalOf(f); },
-      actions: {
-        t: (el, f) => { type = el.dataset.t; for (const c of s.body.querySelectorAll('.chip')) c.setAttribute('aria-pressed', c.dataset.t === type); s.body.querySelector('#cardio-fields').innerHTML = fields(); s.body.querySelector('#cardio-kcal').textContent = kcalOf(f); },
-        save: (_, f, close) => {
-          const min = num(f.min.value);
-          if (!min) return;
-          a.cardio.push({ type, min, speed: num(f.speed?.value), incline: num(f.incline?.value), kcal: kcalOf(f) });
-          close(); save(); paint();
-        },
-      } });
-    s.body.querySelector('#cardio-kcal').textContent = kcalOf(s.form);
+  function cardioSheet() {
+    cardioForm(ctx.profile, 20, (c) => { a.cardio.push(c); save(); paint(); });
   }
 
   async function finish() {
@@ -323,6 +304,45 @@ function renderActive(root, ctx, a) {
   }
 
   paint();
+}
+
+// ---------------- 유산소 입력 (운동 중 추가, 따로 기록 공용) ----------------
+export async function cardioForm(profile, defaultMin, onSave, title = '유산소 추가') {
+  const weight = await currentWeight(profile);
+  let type = 'treadmill';
+  const kcalOf = (f) => {
+    const c = CARDIO.find((x) => x.id === type);
+    return kcalFromMet(c.met(num(f.speed?.value), num(f.incline?.value)), weight, num(f.min.value) || 0);
+  };
+  const fields = () => `<div class="field"><span class="field-label">시간</span>${stepper({ name: 'min', value: defaultMin, step: 5, unit: '분', label: '시간' })}</div>
+    ${type === 'treadmill' ? `<div class="field"><span class="field-label">속도</span>${stepper({ name: 'speed', value: 6, step: 0.5, unit: 'km/h', label: '속도', decimal: true })}</div>
+      <div class="field"><span class="field-label">경사</span>${stepper({ name: 'incline', value: 0, step: 1, unit: '%', label: '경사' })}</div>` : ''}`;
+  const s = sheet({ title,
+    body: `<div class="chips" role="group" aria-label="종류">${CARDIO.map((c) => `<button type="button" class="chip" data-act="t" data-t="${c.id}" aria-pressed="${c.id === type}">${c.name}</button>`).join('')}</div>
+      <div id="cardio-fields">${fields()}</div>
+      <p class="calc-line">약 <span class="measure figure" id="cardio-kcal">0</span><span class="unit">kcal</span></p>
+      <button type="button" class="btn btn--primary btn--wide" data-act="save">저장</button>`,
+    onInput: (_, f) => { s.body.querySelector('#cardio-kcal').textContent = kcalOf(f); },
+    actions: {
+      t: (el, f) => { type = el.dataset.t; for (const c of s.body.querySelectorAll('.chip')) c.setAttribute('aria-pressed', c.dataset.t === type); s.body.querySelector('#cardio-fields').innerHTML = fields(); s.body.querySelector('#cardio-kcal').textContent = kcalOf(f); },
+      save: async (_, f, close) => {
+        const min = num(f.min.value);
+        if (!min) return;
+        close();
+        await onSave({ type, min, speed: num(f.speed?.value), incline: num(f.incline?.value), kcal: kcalOf(f) });
+      },
+    } });
+  s.body.querySelector('#cardio-kcal').textContent = kcalOf(s.form);
+}
+
+// 유산소만 따로 기록: 근력 세션과 섞이지 않는 별도 기록으로 저장
+export function logCardio(profile, target, onDone) {
+  cardioForm(profile, target?.min || 30, async (c) => {
+    const now = Date.now();
+    await db.put('workouts', { id: db.uid(), date: today(), startedAt: now - c.min * 60000, endedAt: now, name: '유산소', planIdx: null,
+      minutes: c.min, exercises: [], cardio: [c], volume: 0, kcal: c.kcal });
+    onDone();
+  }, '유산소 기록');
 }
 
 // ---------------- 지난 운동 보기 ----------------

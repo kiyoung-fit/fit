@@ -10,7 +10,8 @@ import { applyChange } from './plan.js';
 
 function weekReport(all, rows, intake, end = today()) {
   const start = addDays(end, -6);
-  const ws = all.filter((w) => w.date >= start && w.date <= end);
+  const ws = all.filter((w) => w.date >= start && w.date <= end && w.exercises.length);
+  const cardioMin = all.filter((w) => w.date >= start && w.date <= end).reduce((t, w) => t + (w.cardio || []).reduce((u, c) => u + c.min, 0), 0);
   const volume = ws.reduce((s, w) => s + (w.volume || 0), 0);
   const days = Object.keys(intake).filter((d) => d >= start && d <= end);
   const avgKcal = days.length ? days.reduce((s, d) => s + intake[d], 0) / days.length : null;
@@ -25,7 +26,7 @@ function weekReport(all, rows, intake, end = today()) {
       if (before && best > before) prs++;
     }
   }
-  return { count: ws.length, volume, avgKcal, foodDays: days.length, change: nowAvg != null && prevAvg != null ? nowAvg - prevAvg : null, prs };
+  return { count: ws.length, cardioMin, volume, avgKcal, foodDays: days.length, change: nowAvg != null && prevAvg != null ? nowAvg - prevAvg : null, prs };
 }
 
 export async function render(root, ctx) {
@@ -64,6 +65,7 @@ export async function render(root, ctx) {
       : rec ? `<div class="block-head"><h2 id="w-h">오늘은 ${esc(rec.session.name)}</h2><span class="muted measure">${rec.doneThisWeek}/${rec.target}회</span></div>
         <p class="muted">${rec.session.items.map((it) => esc(byId[it.exId].name)).join(', ')}</p>
         ${rec.note ? `<p class="note">${esc(rec.note)}</p>` : ''}
+        ${rec.cardio?.target ? `<p class="muted">유산소 이번 주 <span class="measure">${rec.cardio.done}/${rec.cardio.target.times}</span>회, <span class="measure">${rec.cardio.minutes}</span>분</p>` : ''}
         ${rec.weekDone && !rec.trainedToday ? '<p class="note">이번 주 목표 횟수를 채웠어요. 쉬어도 됩니다.</p>' : ''}
         <div class="row-actions row-actions--plain"><a class="btn btn--primary btn--wide" href="#/workout">운동 시작</a></div>`
       : '<p class="empty">플랜 탭에서 플랜을 만들어주세요.</p>'}
@@ -78,12 +80,12 @@ export async function render(root, ctx) {
     <section class="block" aria-labelledby="r-h">
       <div class="block-head"><h2 id="r-h">최근 7일</h2></div>
       <dl class="stats stats--grid">
-        <div><dt>운동</dt><dd class="measure">${rep.count}<small>회</small></dd></div>
+        <div><dt>근력운동</dt><dd class="measure">${rep.count}<small>회</small></dd></div>
+        <div><dt>유산소</dt><dd class="measure">${rep.cardioMin}<small>분</small></dd></div>
         <div><dt>총 볼륨</dt><dd class="measure">${fmt(rep.volume / 1000, 1)}<small>톤</small></dd></div>
         <div><dt>평균 섭취</dt><dd class="measure">${rep.avgKcal ? fmt(rep.avgKcal) : '-'}<small>${rep.avgKcal ? 'kcal' : ''}</small></dd></div>
         <div><dt>체중 변화</dt><dd class="measure">${rep.change != null ? `${rep.change > 0 ? '+' : ''}${fmt(rep.change, 1)}` : '-'}<small>${rep.change != null ? 'kg' : ''}</small></dd></div>
         <div><dt>기록 갱신</dt><dd class="measure">${rep.prs}<small>번</small></dd></div>
-        <div><dt>식단 기록</dt><dd class="measure">${rep.foodDays}<small>/7일</small></dd></div>
       </dl>
     </section>`;
 
