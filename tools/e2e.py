@@ -92,6 +92,20 @@ with sync_playwright() as p:
     # 새로고침 후 유지
     pg.reload(); pg.wait_for_timeout(800)
     print("after reload home has weight:", "77" in pg.inner_text("main"))
+    # 백업 왕복 + 조작된 백업 거부
+    res = pg.evaluate("""async () => {
+      const db = await import('./js/db.js');
+      const data = await db.exportAll();
+      const n = data.workouts.length;
+      await db.importAll(JSON.parse(JSON.stringify(data)));
+      const ok = (await db.all('workouts')).length === n;
+      const bad = JSON.parse(JSON.stringify(data));
+      bad.meals.push({ id: '"><img src=x onerror=alert(1)>', date: '2026-01-01', slot: 'lunch', name: 'x', kcal: 1, p: 0, c: 0, f: 0 });
+      let rejected = false;
+      try { await db.importAll(bad); } catch { rejected = true; }
+      return { ok, rejected, n };
+    }""")
+    print("backup:", res)
     b.close()
 srv.shutdown()
 print("ERRORS:", errors if errors else "none")

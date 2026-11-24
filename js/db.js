@@ -57,8 +57,22 @@ export async function exportAll() {
   return out;
 }
 
+// 백업 파일 검사: 화면에 그대로 찍히는 식별자·날짜·숫자 칸에 엉뚱한 값(HTML 등)이 들어 있으면 거부
+const ID_KEYS = new Set(['id', 'key', 'date', 'exId', 'slot', 'type', 'goal', 'from', 'until', 'sex', 'birth', 'experience', 'unit', 'kind', 'next', 'createdAt', 'lastBackup', 'skipDeloadWeek']);
+const ID_RE = /^[\w.:-]{0,40}$/;
+const NUM_KEYS = new Set(['w', 'r', 'kcal', 'p', 'c', 'f', 'amount', 'min', 'speed', 'incline', 'volume', 'minutes', 'weight', 'bodyFat', 'muscle',
+  'waist', 'sleep', 'water', 'steps', 'height', 'targetWeight', 'activity', 'days', 'sessionMin', 'sets', 'lo', 'hi', 'rest', 'serving', 'startedAt', 'endedAt', 'planIdx', 'cardio', 'cardioPlan', 'deloadEvery', 'e1rm']);
+function check(v, k = '') {
+  if (Array.isArray(v)) return v.forEach((x) => check(x, k));
+  if (v && typeof v === 'object') return Object.entries(v).forEach(([kk, x]) => check(x, kk));
+  if (ID_KEYS.has(k) && v != null && !(typeof v === 'string' && ID_RE.test(v)) && typeof v !== 'number') throw new Error('백업 파일 내용이 올바르지 않아 불러오지 않았어요.');
+  if (NUM_KEYS.has(k) && v != null && typeof v !== 'number' && !Array.isArray(v) && typeof v !== 'object') throw new Error('백업 파일 내용이 올바르지 않아 불러오지 않았어요.');
+}
+
 export async function importAll(data) {
   if (data?.app !== 'my-health') throw new Error('이 앱에서 만든 백업 파일이 아닙니다.');
+  for (const name of Object.keys(STORES)) if (data[name] != null && !Array.isArray(data[name])) throw new Error('백업 파일 형식이 올바르지 않아요.');
+  check(Object.fromEntries(Object.keys(STORES).map((n) => [n, data[n] || []])));
   const db = await open();
   await new Promise((resolve, reject) => {
     const t = db.transaction(Object.keys(STORES), 'readwrite');
