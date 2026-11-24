@@ -1,0 +1,148 @@
+import { esc, icon, sheet, confirmSheet } from '../ui.js';
+import { GOALS, EXPERIENCE, INJURY, today, addDays, fmt, parseYmd } from '../calc.js';
+import { byId, EQUIP } from '../data/exercises.js';
+import { buildPlan, splitFor, deloadState, swapOptions, minutes, itemFor } from '../planner.js';
+import { getPlan, savePlan, saveProfile, dailyTargets, workouts, historyOf } from '../store.js';
+import { exerciseInfo } from './workout.js';
+
+// 조건 변경을 적용: 목적이 바뀌면 이력에 남기고 플랜을 새로 짠다 (지난 기록과 무게는 그대로)
+export async function applyChange(profile, changes) {
+  const next = { ...profile, ...changes };
+  if (changes.goal && changes.goal !== profile.goal) {
+    next.goalHistory = [...(profile.goalHistory || []), { goal: changes.goal, from: today() }];
+  }
+  await saveProfile(next);
+  await savePlan(buildPlan(next));
+  return next;
+}
+
+export function changeSheet(profile, onDone, focus = null) {
+  const draft = { goal: profile.goal, days: profile.days, sessionMin: profile.sessionMin, experience: profile.experience, injuries: [...(profile.injuries || [])] };
+  const opt = (field, v, label) => `<button type="button" class="chip" data-act="set" data-f="${field}" data-v="${v}" aria-pressed="${draft[field] === v}">${esc(label)}</button>`;
+  const body = () => `
+    <fieldset class="group"><legend>운동 목적</legend><div class="chips">${Object.entries(GOALS).map(([k, g]) => opt('goal', k, g.name)).join('')}</div></fieldset>
+    <fieldset class="group"><legend>주 운동 일수</legend><div class="chips">${[2, 3, 4, 5, 6].map((d) => opt('days', d, `${d}일`)).join('')}</div></fieldset>
+    <fieldset class="group"><legend>한 번 운동 시간</legend><div class="chips">${[45, 60, 75, 90].map((d) => opt('sessionMin', d, `${d}분`)).join('')}</div></fieldset>
+    <fieldset class="group"><legend>운동 경력</legend><div class="chips">${Object.entries(EXPERIENCE).map(([k, v]) => opt('experience', k, v)).join('')}</div></fieldset>
+    <fieldset class="group"><legend>조심할 부위</legend><div class="chips">${Object.entries(INJURY).map(([k, v]) => `<button type="button" class="chip" data-act="inj" data-v="${k}" aria-pressed="${draft.injuries.includes(k)}">${v}</button>`).join('')}</div></fieldset>
+    <div id="preview" class="preview"></div>
+    <button type="button" class="btn btn--primary btn--wide" data-act="apply">새 플랜으로 바꾸기</button>`;
+  const s = sheet({ title: focus === 'goal' ? '운동 목적 바꾸기' : '플랜 조건 바꾸기', wide: true, body: body(),
+    actions: {
+      set: (el) => { const v = el.dataset.v; draft[el.dataset.f] = isNaN(Number(v)) ? v : Number(v); refresh(); },
+      inj: (el) => { const k = el.dataset.v; draft.injuries = draft.injuries.includes(k) ? draft.injuries.filter((x) => x !== k) : [...draft.injuries, k]; refresh(); },
+      apply: async (_, __, close) => { const p = await applyChange(profile, draft); close(); onDone(p); },
+    } });
+  async function refresh() {
+    for (const c of s.body.querySelectorAll('[data-act="set"]')) c.setAttribute('aria-pressed', String(draft[c.dataset.f]) === c.dataset.v);
+    for (const c of s.body.querySelectorAll('[data-act="inj"]')) c.setAttribute('aria-pressed', draft.injuries.includes(c.dataset.v));
+    const before = await dailyTargets(profile);
+    const after = await dailyTargets({ ...profile, ...draft });
+    s.body.querySelector('#preview').innerHTML = `<h3 class="sheet-sub">바뀌는 점</h3><dl class="diff">
+      <div><dt>하루 목표</dt><dd class="measure">${fmt(before.kcal)} <span class="muted">에서</span> ${fmt(after.kcal)}<small>kcal</small></dd></div>
+      <div><dt>단백질</dt><dd class="measure">${before.protein} <span class="muted">에서</span> ${after.protein}<small>g</small></dd></div>
+      <div><dt>분할</dt><dd>${esc(splitFor(draft.days).name)}</dd></div></dl>
+      <p class="fine">지난 운동·식단·체중 기록과 종목별 최고기록은 그대로 남아요. 새 플랜도 지금까지 든 무게에서 이어서 추천해요.</p>`;
+  }
+  refresh();
+}
+
+export async function render(root, ctx) {
+  const p = ctx.profile;
+  let plan = await getPlan();
+  if (!plan) { plan = buildPlan(p); await savePlan(plan); }
+  const dl = deloadState(plan);
+  const all = await workouts();
+  const phase = p.phase;
+
+  root.innerHTML = `
+    <section class="block" aria-labelledby="goal-h">
+      <div class="block-head"><h2 id="goal-h">${esc(GOALS[p.goal].name)}</h2>
+        <button type="button" class="btn btn--small" data-act="change-goal">목적 바꾸기</button></div>
+      <dl class="facts">
+        <div><dt>분할</dt><dd>${esc(plan.split)}</dd></div>
+        <div><dt>주 횟수</dt><dd class="measure">${p.days}일</dd></div>
+        <div><dt>1회 시간</dt><dd class="measure">${p.sessionMin}분</dd></div>
+        <div><dt>경력</dt><dd>${esc(EXPERIENCE[p.experience])}</dd></div>
+        <div><dt>조심할 부위</dt><dd>${p.injuries?.length ? p.injuries.map((k) => INJURY[k]).join(', ') : '없음'}</dd></div>
+        <div><dt>가벼운 주</dt><dd>${dl.isDeload ? '이번 주' : `<span class="measure">${dl.weeksLeft}</span>주 뒤`}</dd></div>
+      </dl>
+      <div class="row-actions row-actions--plain">
+        <button type="button" class="btn" data-act="change">조건 바꾸기</button>
+        <button type="button" class="btn" data-act="phase">${phase ? '기간 설정 바꾸기' : '기간 정해두기'}</button>
+      </div>
+      ${phase ? `<p class="note">지금 목적은 <span class="measure">${md(phase.until)}</span>까지예요. 그다음 목적은 ${esc(GOALS[phase.next].name)}. 그날이 되면 바꿀지 홈에서 물어볼게요.</p>` : ''}
+    </section>
+
+    ${plan.sessions.map((s, i) => `<section class="block" aria-labelledby="s-${i}">
+      <div class="block-head"><h2 id="s-${i}">${esc(s.name)}</h2><span class="muted">약 <span class="measure">${minutes(s)}</span>분${i === plan.next % plan.sessions.length ? ', 다음 차례' : ''}</span></div>
+      <ul class="rows">${s.items.map((it, j) => {
+        const ex = byId[it.exId];
+        const last = historyOf(all, it.exId)[0];
+        const top = last ? Math.max(0, ...last.sets.filter((x) => !x.warm).map((x) => x.w || 0)) : 0;
+        return `<li><button type="button" class="row" data-act="item" data-s="${i}" data-j="${j}">
+          <span class="row-main"><span>${esc(ex.name)}</span><span class="muted">${EQUIP[ex.equip]}${top ? `, 최근 ${top}kg` : ''}</span></span>
+          <span class="row-side measure">${it.sets}×${it.lo}-${it.hi}</span></button></li>`;
+      }).join('')}</ul>
+      ${s.cardio ? `<p class="muted">마무리 유산소 <span class="measure">${s.cardio}</span>분</p>` : ''}
+    </section>`).join('')}
+
+    <section class="block">
+      <h2>규칙</h2>
+      <ul class="rules">
+        <li>목표 반복수 윗값을 모든 세트에서 채우면 다음엔 상체 2.5kg, 하체 5kg 올려요.</li>
+        <li>같은 무게에서 3번 연속 아랫값을 못 채우면 10% 낮춰 다시 쌓아요.</li>
+        <li>${plan.deloadEvery}주마다 1주는 무게 10%, 세트 1개를 줄여 회복해요.</li>
+        <li>어제 쓴 부위와 겹치면 다른 세션을 먼저 추천해요.</li>
+      </ul>
+      <div class="row-actions row-actions--plain"><button type="button" class="btn" data-act="rebuild">플랜 처음부터 다시 짜기</button></div>
+    </section>`;
+
+  root.onclick = async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'change' || act === 'change-goal') return changeSheet(p, () => ctx.refresh(), act === 'change-goal' ? 'goal' : null);
+    if (act === 'phase') return phaseSheet(p, ctx);
+    if (act === 'rebuild') {
+      if (await confirmSheet('플랜 다시 짜기', '직접 바꾼 종목이 기본값으로 돌아가요. 운동 기록은 그대로예요.', '다시 짜기')) { await savePlan(buildPlan(p)); ctx.refresh(); }
+    }
+    if (act === 'item') {
+      const s = plan.sessions[b.dataset.s], j = Number(b.dataset.j);
+      const it = s.items[j];
+      const opts = swapOptions(it.exId, p);
+      sheet({ title: byId[it.exId].name, wide: true,
+        body: `<div class="row-actions row-actions--plain"><button type="button" class="btn" data-act="info">자세 요점과 기록 보기</button></div>
+          <h3 class="sheet-sub">다른 종목으로 바꾸기</h3>
+          <ul class="rows">${opts.map((o) => `<li><button type="button" class="row" data-act="pick" data-id="${o.id}">
+            <span class="row-main"><span>${esc(o.name)}</span><span class="muted">${EQUIP[o.equip]}${o.hurts ? ', 아픈 부위에 부담' : ''}</span></span></button></li>`).join('')}</ul>`,
+        actions: {
+          info: (_, __, close) => { close(); exerciseInfo(it.exId, all); },
+          pick: async (el, _, close) => {
+            const ex = byId[el.dataset.id];
+            s.items[j] = { ...itemFor(ex, p) };
+            await savePlan(plan); close(); ctx.refresh();
+          },
+        } });
+    }
+  };
+}
+
+const md = (d) => { const x = parseYmd(d); return `${x.getMonth() + 1}월 ${x.getDate()}일`; };
+
+function phaseSheet(p, ctx) {
+  let weeks = 8, next = p.goal === 'cut' ? 'bulk' : 'cut';
+  const chips = () => `<fieldset class="group"><legend>지금 목적을 몇 주 동안</legend><div class="chips">${[4, 6, 8, 12, 16].map((w) => `<button type="button" class="chip" data-act="w" data-v="${w}" aria-pressed="${w === weeks}">${w}주</button>`).join('')}</div></fieldset>
+    <fieldset class="group"><legend>그다음 목적</legend><div class="chips">${Object.entries(GOALS).filter(([k]) => k !== p.goal).map(([k, g]) => `<button type="button" class="chip" data-act="n" data-v="${k}" aria-pressed="${k === next}">${g.name}</button>`).join('')}</div></fieldset>
+    <p class="fine">기간이 끝나면 홈 화면에서 바꿀지 물어봐요. 자동으로 바뀌지는 않아요.</p>
+    <div class="row-actions">${p.phase ? '<button type="button" class="btn" data-act="clear">기간 설정 없애기</button>' : ''}
+    <button type="button" class="btn btn--primary btn--wide" data-act="save">저장</button></div>`;
+  const s = sheet({ title: '기간 정해두기', body: chips(), actions: {
+    w: (el) => { weeks = Number(el.dataset.v); s.body.innerHTML = chips(); },
+    n: (el) => { next = el.dataset.v; s.body.innerHTML = chips(); },
+    save: async (_, __, close) => { await saveProfile({ ...p, phase: { until: addDays(today(), weeks * 7), next } }); close(); ctx.refresh(); },
+    clear: async (_, __, close) => { await saveProfile({ ...p, phase: null }); close(); ctx.refresh(); },
+  } });
+}
+
+export { icon };

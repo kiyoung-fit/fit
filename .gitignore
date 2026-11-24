@@ -1,0 +1,6 @@
+tools/raw/
+tools/shots/
+tools/*.log
+__pycache__/
+.claude/
+.hallmark/
