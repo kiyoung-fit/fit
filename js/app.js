@@ -1,6 +1,9 @@
 import { getProfile } from './store.js';
 import { resumeRest, adjustRest, stopRest, keepAwake, unlockAudio } from './ui.js';
 import * as db from './db.js';
+import { loadCustom } from './custom.js';
+
+let customLoaded = null;
 
 const VIEWS = {
   home: { title: '오늘', load: () => import('./views/home.js') },
@@ -20,6 +23,7 @@ export function go(hash) {
 
 async function route() {
   const id = ++renderId;
+  await (customLoaded ??= loadCustom().catch(() => {}));
   const profile = await getProfile();
   if (!profile) {
     document.body.classList.add('is-onboarding');

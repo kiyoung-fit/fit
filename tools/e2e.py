@@ -64,10 +64,40 @@ with sync_playwright() as p:
     pg.click(".ex-title >> nth=0"); pg.wait_for_timeout(900); pg.screenshot(path=str(OUT / "09b-info.png"))
     print("anim imgs loaded:", pg.evaluate("[...document.querySelectorAll('dialog .ex-anim img')].map(i => i.naturalWidth)"))
     pg.click("dialog [data-act=close]")
-    pg.click("[data-act=add-cardio]"); pg.wait_for_timeout(300); shot(pg, "10-cardio"); pg.click("dialog [data-act=save]"); pg.wait_for_timeout(300)
+    print("in-session cardio button gone:", pg.locator("[data-act=add-cardio]").count() == 0)
+    print("balance:", pg.inner_text("#sess-balance"))
+    # 세션 중 유산소 따로 기록
+    pg.click("[data-act=cardio-apart]"); pg.wait_for_timeout(300); shot(pg, "10-cardio"); pg.click("dialog [data-act=save]"); pg.wait_for_timeout(500)
+    print("apart notice:", pg.inner_text("#notice"))
+    # 종목 추가 시트: 부위 상태, 내 운동 추가 (부위 필수)
+    pg.click("[data-act=add-ex]"); pg.wait_for_timeout(500); shot(pg, "10b-add-sheet")
+    print("add status:", " ".join(pg.inner_text("#add-status").split()))
+    pg.click("dialog [data-act=new]"); pg.wait_for_timeout(400)
+    pg.fill("dialog input[name=name]", "해머 로우 머신")
+    pg.click("dialog [data-act=muscle][data-v=chest]"); pg.wait_for_timeout(150)
+    pg.click("dialog [data-act=muscle][data-v=back]"); pg.wait_for_timeout(150)
+    pg.click("dialog [data-act=pattern][data-v=hpull]")
+    pg.click("dialog [data-act=save]"); pg.wait_for_timeout(700); shot(pg, "10c-custom-added")
+    print("custom in session:", pg.locator(".ex .ex-name", has_text="해머 로우 머신").count(), "tile:", pg.locator(".ex .ex-tile").count())
+    cust = pg.locator(".ex", has_text="해머 로우 머신")
+    cr = cust.locator(".sets .set").first
+    cr.locator("input[name=w]").fill("50"); cr.locator("input[name=w]").dispatch_event("input"); cr.locator("[data-act=done]").click()
     pg.click("[data-act=finish]"); pg.wait_for_timeout(800); shot(pg, "11-finish")
-    print("finish:", pg.inner_text("dialog .stats").replace("\n", " "))
+    print("finish:", pg.inner_text("dialog .stats").replace("\n", " "), "|", " ".join(pg.inner_text("dialog .note").split()))
     pg.click("dialog [data-act=close]"); pg.wait_for_timeout(400)
+    # 지난 운동 고치기: 첫 세트 무게 600으로 잘못 넣은 셈 치고 고쳐서 저장
+    pg.goto(URL + "#/workout"); pg.wait_for_timeout(600)
+    print("history rows:", [" ".join(t.split()) for t in pg.locator("section[aria-labelledby=hist-h] .row").all_inner_texts()], "dialogs open:", pg.locator("dialog[open]").count())
+    pg.locator("section[aria-labelledby=hist-h] .row", has_text="상체").first.click(); pg.wait_for_timeout(500)
+    v0 = pg.inner_text("dialog .stats")
+    w0 = pg.locator("dialog .sets .set:not(.set--warm) input[name=w]").first
+    w0.fill("70"); w0.dispatch_event("input")
+    pg.click("dialog [data-act=save]"); pg.wait_for_timeout(600)
+    if not pg.locator("section[aria-labelledby=hist-h] .row", has_text="상체").count():
+        shot(pg, "debug-after-save"); print("DEBUG errors so far:", errors, pg.locator("dialog[open]").count())
+    pg.locator("section[aria-labelledby=hist-h] .row", has_text="상체").first.click(); pg.wait_for_timeout(500)
+    print("edit volume:", " ".join(v0.split()), "->", " ".join(pg.inner_text("dialog .stats").split()))
+    pg.click("dialog [data-act=close]"); pg.wait_for_timeout(300)
     # 유산소 따로 기록
     pg.goto(URL + "#/workout"); pg.wait_for_timeout(600)
     pg.click("[data-act=cardio]"); pg.wait_for_timeout(300)
@@ -117,6 +147,45 @@ with sync_playwright() as p:
       return { ok, rejected, n };
     }""")
     print("backup:", res)
+    # 턱걸이 우선 넣기 + 세션 고치기 + 시간 미리보기
+    pg.goto(URL + "#/plan"); pg.wait_for_timeout(700)
+    pg.click("[data-act=pullup-yes]"); pg.wait_for_timeout(800)
+    print("pullup in plan:", pg.locator(".row", has_text="풀업").count())
+    pg.click("[data-act=edit] >> nth=0"); pg.wait_for_timeout(400)
+    before = pg.locator("dialog .edit-row").count()
+    pg.click("dialog .edit-row >> nth=0 >> [data-act=more]"); pg.wait_for_timeout(200)
+    pg.click("dialog [data-act=m][data-m=triceps]"); pg.wait_for_timeout(200)
+    pg.click("dialog [data-act=add] >> nth=0"); pg.wait_for_timeout(300); shot(pg, "19b-edit-session")
+    print("edit rows:", before, "->", pg.locator("dialog .edit-row").count(), "|", " ".join(pg.inner_text("dialog .sheet-body > p.muted").split())[:90])
+    pg.click("dialog .sheet-body [data-act=close]"); pg.wait_for_timeout(600)
+    pg.click("[data-act=change]"); pg.wait_for_timeout(400)
+    pg.click("dialog [data-f=sessionMin][data-v='90']"); pg.wait_for_timeout(700)
+    print("preview:", " ".join(pg.inner_text("#preview").split())[:260])
+    pg.click("dialog [data-act=close]")
+    # 턱걸이 세션: 추가 무게 칸
+    idx = pg.evaluate("import('./js/db.js').then(async db => (await db.kv('plan')).sessions.findIndex(s => s.items.some(i => i.exId === 'pullup')))")
+    pg.goto(URL + "#/workout"); pg.wait_for_timeout(600); pg.click("[data-act=pick]"); pg.wait_for_timeout(300)
+    pg.click(f"dialog [data-act=go][data-idx='{idx}']"); pg.wait_for_timeout(600)
+    pu = pg.locator(".ex", has_text="풀업")
+    print("pullup head:", " ".join(pu.locator(".set--head").inner_text().split()), "| sug:", pu.locator(".ex-sug").inner_text()[:60])
+    r0 = pu.locator(".sets .set").first
+    r0.locator("input[name=w]").fill("5"); r0.locator("input[name=w]").dispatch_event("input")
+    r0.locator("input[name=r]").fill("8"); r0.locator("input[name=r]").dispatch_event("input"); r0.locator("[data-act=done]").click()
+    pg.click("[data-act=finish]"); pg.wait_for_timeout(800)
+    print("pullup finish:", " ".join(pg.inner_text("dialog .stats").split()))
+    pg.click("dialog [data-act=close]"); pg.wait_for_timeout(300)
+    print("pullup saved:", pg.evaluate("import('./js/db.js').then(async db => (await db.all('workouts')).flatMap(w => w.exercises).filter(e => e.exId === 'pullup').map(e => e.sets[0]))"))
+    # 백업: 내 운동 포함, 조작된 사진 거부
+    res2 = pg.evaluate("""async () => {
+      const db = await import('./js/db.js');
+      const data = await db.exportAll();
+      const hasCustom = (data.kv.find(r => r.key === 'customExercises')?.value || []).length;
+      const bad = JSON.parse(JSON.stringify(data));
+      bad.kv.push({ key: 'exPhoto:c_x', value: 'javascript:alert(1)' });
+      let rejected = false; try { await db.importAll(bad); } catch { rejected = true; }
+      return { hasCustom, rejected };
+    }""")
+    print("backup custom:", res2)
     # 예전 규칙 플랜이 새 규칙으로 바뀌는지
     pg.evaluate("import('./js/db.js').then(async db => { const p = await db.kv('plan'); delete p.rules; await db.setKv('plan', p); })")
     pg.goto(URL + "#/plan"); pg.wait_for_timeout(800); shot(pg, "19-plan-upgraded")

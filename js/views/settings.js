@@ -3,6 +3,11 @@ import { esc, stepper, num, sheet, confirmSheet, notice, download } from '../ui.
 import { ACTIVITY, GOALS, today, age, fmt } from '../calc.js';
 import { saveProfile, dailyTargets } from '../store.js';
 import { changeSheet } from './plan.js';
+import { customForm } from '../custom.js';
+import { exerciseInfo } from './workout.js';
+import { MUSCLES, EQUIP, byId } from '../data/exercises.js';
+import { workouts } from '../store.js';
+import { exThumb } from '../ui.js';
 
 export async function render(root, ctx) {
   const p = ctx.profile;
@@ -10,6 +15,7 @@ export async function render(root, ctx) {
   const persisted = await navigator.storage?.persisted?.().catch(() => null);
   const counts = { workouts: (await db.all('workouts')).length, meals: (await db.all('meals')).length, body: (await db.all('body')).length };
   const act = ACTIVITY.find((a) => a.v === p.activity);
+  const custom = (await db.kv('customExercises', [])).filter((c) => !c.deleted && byId[c.id]);
 
   root.innerHTML = `
     <section class="block" aria-labelledby="me-h">
@@ -23,6 +29,13 @@ export async function render(root, ctx) {
         <div><dt>하루 목표</dt><dd class="measure">${fmt(t.kcal)}kcal${t.usingAdaptive ? ' (실측)' : ''}</dd></div>
       </dl>
       <p class="fine">체중은 건강 탭에서 기록해요. 칼로리 목표는 가장 최근 체중으로 계산해요.</p>
+    </section>
+
+    <section class="block" aria-labelledby="mine-h">
+      <div class="block-head"><h2 id="mine-h">내 운동</h2><button type="button" class="btn btn--small" data-act="add-mine">추가</button></div>
+      ${custom.length ? `<ul class="rows">${custom.map((c) => `<li><button type="button" class="row" data-act="mine" data-id="${c.id}">${exThumb(c.id)}
+        <span class="row-main"><span>${esc(c.name)}</span><span class="muted">${MUSCLES[c.muscle]}, ${EQUIP[c.equip]}</span></span></button></li>`).join('')}</ul>`
+      : '<p class="empty">다니는 헬스장 기구 중 목록에 없는 운동을 추가하면, 운동 중 목록과 플랜에 함께 나와요.</p>'}
     </section>
 
     <section class="block" aria-labelledby="goal-h">
@@ -61,6 +74,8 @@ export async function render(root, ctx) {
     if (!b) return;
     const a = b.dataset.act;
     if (a === 'goal') return changeSheet(p, () => ctx.refresh());
+    if (a === 'add-mine') return customForm({ onSaved: () => ctx.refresh() });
+    if (a === 'mine') return exerciseInfo(b.dataset.id, await workouts(), () => ctx.refresh());
     if (a === 'me') return meSheet(p, ctx);
     if (a === 'export') return exportBackup(p, ctx);
     if (a === 'import') return root.querySelector('#import-file').click();

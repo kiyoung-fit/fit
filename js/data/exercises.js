@@ -11,7 +11,7 @@ export const EQUIP = { barbell: '바벨', dumbbell: '덤벨', machine: '머신',
 
 const E = (id, name, muscle, pattern, equip, o = {}) => ({
   id, name, muscle, pattern, equip,
-  compound: o.c ?? false, beg: o.beg ?? true, inc: o.inc ?? (equip === 'barbell' ? 2.5 : equip === 'dumbbell' ? 2 : equip === 'body' ? 0 : 5),
+  compound: o.c ?? false, beg: o.beg ?? true, inc: o.inc ?? (equip === 'barbell' ? 2.5 : equip === 'dumbbell' ? 2 : 5), // 맨몸은 추가 무게(벨트 원판) 2.5kg 단위
   avoid: o.avoid ?? [], muscles: o.m, tips: o.t, met: o.met ?? (o.c ? 6 : 4),
 });
 
@@ -123,7 +123,7 @@ export const EXERCISES = [
     t: ['EZ바를 이마 뒤쪽으로 내린다', '팔꿈치가 벌어지지 않게', '무게를 무리하게 올리지 않는다'] }),
 
   // 코어
-  E('plank', '플랭크', 'core', 'core', 'body', { m: '복근, 코어',
+  E('plank', '플랭크', 'core', 'core', 'body', { inc: 0, m: '복근, 코어',
     t: ['팔꿈치는 어깨 바로 아래', '엉덩이가 처지거나 솟지 않게', '횟수 칸에 초 단위로 기록'] }),
   E('cable_crunch', '케이블 크런치', 'core', 'core', 'cable', { m: '복직근',
     t: ['무릎 꿇고 로프를 머리 옆에 고정', '갈비뼈를 골반 쪽으로 말아 내린다', '엉덩이로 당기지 않는다'] }),
@@ -142,4 +142,41 @@ export const CARDIO = [
   { id: 'walk', name: '걷기 (야외)', met: () => 3.5 },
 ];
 
+// 직접 추가한 운동의 사진 (id -> data URL), custom.js가 채움
+export const PHOTOS = {};
+
 export const byId = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
+
+// 부위별로 고를 수 있는 동작 종류 (내 운동 추가 화면용). pattern은 플랜이 슬롯을 채울 때 쓰는 값
+export const PATTERNS = {
+  chest: [['hpush', '누르기 (프레스·푸시업)'], ['chest_iso', '모으기 (플라이)'], ['dip', '딥스']],
+  back: [['vpull', '위에서 당기기 (풀업·랫풀다운)'], ['hpull', '앞에서 당기기 (로우)'], ['back_iso', '팔 펴고 당기기 (풀다운)']],
+  shoulders: [['vpush', '머리 위로 밀기 (프레스)'], ['side_delt', '옆으로 들기 (레이즈)'], ['rear_delt', '뒤로 당기기 (후면)']],
+  quads: [['squat', '앉았다 일어나기 (스쿼트·레그프레스)'], ['lunge', '한 다리씩 (런지)'], ['quad_iso', '무릎 펴기 (익스텐션)']],
+  hams: [['hinge', '엉덩이 접기 (데드리프트)'], ['ham_iso', '무릎 굽히기 (레그 컬)']],
+  glutes: [['hinge', '엉덩이 밀기 (힙 쓰러스트)'], ['glute_iso', '다리 벌리기·모으기']],
+  biceps: [['biceps', '팔 굽히기 (컬)']],
+  triceps: [['triceps', '팔 펴기 (익스텐션·푸시다운)']],
+  core: [['core', '복근·코어']],
+  calves: [['calves', '종아리']],
+};
+const ISO = new Set(['chest_iso', 'back_iso', 'side_delt', 'rear_delt', 'quad_iso', 'ham_iso', 'glute_iso', 'biceps', 'triceps', 'core', 'calves']);
+
+// 직접 추가한 운동을 목록에 합친다 (앱 시작 때와 추가·수정·삭제 때마다 호출)
+export function registerCustom(list) {
+  for (let i = EXERCISES.length - 1; i >= 0; i--) if (EXERCISES[i].custom) { delete byId[EXERCISES[i].id]; EXERCISES.splice(i, 1); }
+  for (const c of list || []) {
+    if (c.deleted) { byId[c.id] = { ...toExercise(c), name: `${c.name} (삭제된 운동)`, hidden: true }; continue; }
+    const e = toExercise(c);
+    EXERCISES.push(e);
+    byId[e.id] = e;
+  }
+}
+function toExercise(c) {
+  const compound = c.compound ?? !ISO.has(c.pattern);
+  return {
+    id: c.id, name: c.name, muscle: c.muscle, pattern: c.pattern, equip: c.equip, compound, beg: true,
+    inc: c.equip === 'barbell' ? 2.5 : c.equip === 'dumbbell' ? 2 : c.equip === 'body' ? 2.5 : 5,
+    avoid: [], muscles: `${MUSCLES[c.muscle]} (직접 추가)`, tips: c.memo ? [c.memo] : [], met: compound ? 6 : 4, custom: true, photo: !!c.photo,
+  };
+}

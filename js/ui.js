@@ -1,3 +1,4 @@
+import { byId, PHOTOS, MUSCLES } from './data/exercises.js';
 // 화면 공통 도구: 이스케이프, 아이콘, 바텀시트, 알림 줄, 휴식 타이머, 화면 꺼짐 방지
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -25,8 +26,18 @@ export const icon = (name, label = '') =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" ${label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"'}>${P[name]}</svg>`;
 
 // 운동 사진: 같은 파란 톤으로 바꾼 시작·끝 자세 2장 (tools/make_ex_images.py)
-export const exThumb = (id) => `<span class="ex-thumb" aria-hidden="true"><img src="img/ex/${id}-0.webp" alt="" width="72" height="48" loading="lazy" decoding="async"></span>`;
-export const exAnim = (id, name) => `<figure class="ex-anim" role="img" aria-label="${esc(name)} 시작 자세와 끝 자세">
+// 직접 추가한 운동: 찍은 사진이 있으면 그 사진, 없으면 부위 이름 타일
+const customPic = (id, cls) => {
+  const ex = byId[id];
+  if (PHOTOS[id]) return `<img src="${PHOTOS[id]}" alt="" width="480" height="320" decoding="async"${cls ? ` class="${cls}"` : ''}>`;
+  return `<span class="ex-tile">${esc(MUSCLES[ex?.muscle] || '내 운동')}</span>`;
+};
+export const exThumb = (id) => byId[id]?.custom
+  ? `<span class="ex-thumb" aria-hidden="true">${customPic(id)}</span>`
+  : `<span class="ex-thumb" aria-hidden="true"><img src="img/ex/${id}-0.webp" alt="" width="72" height="48" loading="lazy" decoding="async"></span>`;
+export const exAnim = (id, name) => byId[id]?.custom
+  ? `<figure class="ex-anim" role="img" aria-label="${esc(name)}">${customPic(id)}</figure>`
+  : `<figure class="ex-anim" role="img" aria-label="${esc(name)} 시작 자세와 끝 자세">
   <img src="img/ex/${id}-0.webp" alt="" width="480" height="320" decoding="async">
   <img class="ex-anim-b" src="img/ex/${id}-1.webp" alt="" width="480" height="320" decoding="async"></figure>`;
 

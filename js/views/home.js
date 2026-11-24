@@ -7,6 +7,7 @@ import { byId } from '../data/exercises.js';
 import { sparkline } from '../chart.js';
 import { weightTrend } from './health.js';
 import { applyChange } from './plan.js';
+import { logCardio } from './workout.js';
 
 function weekReport(all, rows, intake, end = today()) {
   const start = addDays(end, -6);
@@ -65,11 +66,16 @@ export async function render(root, ctx) {
       : rec ? `<div class="block-head"><h2 id="w-h">오늘은 ${esc(rec.session.name)}</h2><span class="muted measure">${rec.doneThisWeek}/${rec.target}회</span></div>
         <p class="muted">${rec.session.items.map((it) => esc(byId[it.exId].name)).join(', ')}</p>
         ${rec.note ? `<p class="note">${esc(rec.note)}</p>` : ''}
-        ${rec.cardio?.target ? `<p class="muted">유산소 이번 주 <span class="measure">${rec.cardio.done}/${rec.cardio.target.times}</span>회, <span class="measure">${rec.cardio.minutes}</span>분</p>` : ''}
         ${rec.weekDone && !rec.trainedToday ? '<p class="note">이번 주 목표 횟수를 채웠어요. 쉬어도 됩니다.</p>' : ''}
         <div class="row-actions row-actions--plain"><a class="btn btn--primary btn--wide" href="#/workout">운동 시작</a></div>`
       : '<p class="empty">플랜 탭에서 플랜을 만들어주세요.</p>'}
     </section>
+
+    ${rec?.cardio?.target ? `<section class="block" aria-labelledby="c-h">
+      <div class="block-head"><h2 id="c-h">유산소</h2><span class="muted measure">${rec.cardio.done}/${rec.cardio.target.times}회</span></div>
+      <p class="muted">이번 주 <span class="measure">${rec.cardio.minutes}</span>분. 근력운동과 따로, 힘이 남는 날 언제든 기록하세요.</p>
+      <div class="row-actions row-actions--plain"><button type="button" class="btn btn--wide" data-act="cardio">유산소 기록하기</button></div>
+    </section>` : ''}
 
     <a class="block block--link" href="#/health">
       <span class="block-cap">체중 7일 평균</span>
@@ -93,6 +99,7 @@ export async function render(root, ctx) {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     if (b.dataset.act === 'phase-go') { await applyChange({ ...p, phase: null }, { goal: p.phase.next }); ctx.refresh(); }
+    if (b.dataset.act === 'cardio') return logCardio(p, rec?.cardio?.target, () => ctx.refresh());
     if (b.dataset.act === 'phase-keep') { const { saveProfile } = await import('../store.js'); await saveProfile({ ...p, phase: null }); ctx.refresh(); }
   };
 }

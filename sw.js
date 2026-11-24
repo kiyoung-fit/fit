@@ -1,12 +1,12 @@
 // 오프라인 동작: 앱 파일은 미리 저장, 새 버전이 있으면 다음 실행 때 반영
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = `my-health-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest',
   'css/app.css', 'css/tokens.css', 'css/base.css',
   'fonts/geist-mono-400.woff2', 'fonts/geist-mono-500.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
-  'js/app.js', 'js/db.js', 'js/calc.js', 'js/ui.js', 'js/store.js', 'js/planner.js', 'js/foods.js', 'js/chart.js',
+  'js/app.js', 'js/custom.js', 'js/db.js', 'js/calc.js', 'js/ui.js', 'js/store.js', 'js/planner.js', 'js/foods.js', 'js/chart.js',
   'js/data/exercises.js', 'js/data/foods.json',
   'js/views/home.js', 'js/views/workout.js', 'js/views/plan.js', 'js/views/food.js', 'js/views/health.js', 'js/views/settings.js', 'js/views/onboarding.js',
 ];
